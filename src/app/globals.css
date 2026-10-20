@@ -1,49 +1,250 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --bg: #08090a;
+  --surface: #111315;
+  --border: #23272b;
+  --text: #e6e6e3;
+  --muted: #8b9096;
+  --accent: #c8f0ff;
+  --danger: #ff8a80;
+  --ok: #9be7a8;
+  --warn: #ffd27a;
+  --sans: var(--font-geist-sans), system-ui, sans-serif;
+  --mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
-  height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
   min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
-  color: inherit;
-  text-decoration: none;
+  color: var(--accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+h1,
+h2,
+h3 {
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+time,
+strong {
+  font-family: var(--mono);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Public landing ---------- */
+
+body > main.landing {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+main.landing h1 {
+  font-size: clamp(2rem, 8vw, 4rem);
+}
+
+main.landing p {
+  color: var(--muted);
+  font-family: var(--mono);
+  max-width: 34ch;
+  margin-inline: auto;
+}
+
+/* ---------- Admin + login ---------- */
+
+body > header,
+body > main:not(.landing),
+body > footer {
+  width: min(100% - 2rem, 52rem);
+  margin-inline: auto;
+}
+
+body > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+body > header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+body > header nav a[aria-current="page"] {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+body > main:not(.landing) {
+  display: grid;
+  gap: 2rem;
+  padding-block: 2rem 4rem;
+}
+
+section {
+  display: grid;
+  gap: 1rem;
+}
+
+article {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+article > header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+article > p.post {
+  font-size: 1.1rem;
+}
+
+p.flag {
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+p.source {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+p.notice {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+p.error {
+  color: var(--danger);
+}
+
+form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+form.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--muted);
+}
+
+button[value="approved"] {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+button[value="rejected"] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+th,
+td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+body > footer {
+  padding-block: 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Narrow screens: the runs table scrolls inside its section, never the page. */
+section.runs {
+  overflow-x: auto;
 }
