@@ -47,3 +47,11 @@ alter table public.generation_runs enable row level security;
 
 revoke all on public.posts from anon, authenticated;
 revoke all on public.generation_runs from anon, authenticated;
+
+-- Explicit grants for the server role. From 30 Oct 2026 Supabase stops
+-- auto-granting Data API access to new public tables (new projects, branches,
+-- db reset), so without these the secret-key client gets "permission denied".
+-- anon and authenticated are deliberately left with no grants.
+grant select, insert, update, delete on public.posts to service_role;
+grant select, insert, update, delete on public.generation_runs to service_role;
+grant usage on type public.post_status, public.post_format to service_role;

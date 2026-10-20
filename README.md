@@ -59,6 +59,7 @@ npm run build      # production build
 ## Security notes
 
 - All tables have row-level security on with **no policies**: the public keys cannot read or write anything. Only server code with `SUPABASE_SECRET_KEY` touches data, and only after checking the cron secret or the admin session.
+- Grants are explicit in the migration: `service_role` gets read/write, `anon` and `authenticated` get nothing. Supabase stopped auto-granting new public tables from 30 Oct 2026, so any future migration that adds a table must grant `service_role` in the same file.
 - `/admin` is guarded twice: the proxy redirects requests with no session, and every page render and Server Action checks the session email against `ADMIN_EMAIL` using `getClaims()`.
 - The sign-in form only sends a link to `ADMIN_EMAIL`, and shows everyone the same message, so it does not reveal which address is the admin's.
 - The cron secret is compared in constant time. Error details stay in logs and the runs table, never in HTTP responses.
