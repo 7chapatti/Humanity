@@ -23,8 +23,9 @@ Cost per run is logged (input, cached and output tokens) in the runs table on `/
 3. **Authentication → Sign In / Providers**: turn **off** "Allow new users to sign up".
 4. **Authentication → Users**: add your admin email as a user ("Add user" → "Send invitation" or create it).
 5. **Authentication → URL Configuration**: set Site URL to your `SITE_URL` and add `<SITE_URL>/auth/confirm` to the redirect allow list.
-6. **Authentication → Emails → Magic Link** template: make the link
-   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`
+6. The default Magic Link email works as-is: Supabase verifies the link and redirects to `/auth/confirm?code=...`, which the app exchanges for a session. Open the link in the same browser you requested it from.
+   - Supabase's built-in email sender only delivers to members of your Supabase organisation and is rate-limited, so use your Supabase account email as `ADMIN_EMAIL`.
+   - If you later add custom SMTP, you can switch the template link to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`; both formats are handled.
 
 ### 2. Environment
 
@@ -70,7 +71,8 @@ npm run build      # production build
 
 ## Changing things
 
-- **Model**: set `POST_MODEL`.
+- **Provider**: set `AI_PROVIDER` to `anthropic` or `openai`, plus that provider's API key. The persona and output format are identical either way (`src/lib/generate.ts` has one small adapter per provider).
+- **Model**: set `POST_MODEL`, or leave it empty for the provider's default.
 - **Voice**: edit `src/lib/persona.ts`. Keep it free of dates or per-run values so it stays cacheable.
 - **Feeds**: set `FEED_URLS`.
 - **Batch size**: set `POSTS_PER_RUN` (max 30).

@@ -5,10 +5,19 @@ import { z } from "zod";
  * All server configuration in one place. Model names live here so they can be
  * swapped by changing an environment variable, without touching code.
  */
-const serverEnvSchema = z.object({
-  ANTHROPIC_API_KEY: z.string().min(1),
-  /** Model for the weekly batch of flagship posts. */
-  POST_MODEL: z.string().min(1).default("claude-sonnet-5-5"),
+export const DEFAULT_MODELS = {
+  anthropic: "claude-sonnet-5-5",
+  // Listed in OpenAI's complimentary-tokens model group (data sharing opt-in).
+  openai: "gpt-5.4-mini-2026-03-17",
+} as const;
+
+const serverEnvObject = z.object({
+  /** Which API writes the posts. The persona is identical either way. */
+  AI_PROVIDER: z.enum(["anthropic", "openai"]).default("anthropic"),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  /** Model for the weekly batch. Defaults per provider (DEFAULT_MODELS). */
+  POST_MODEL: z.string().min(1).optional(),
   /** Comma-separated https RSS feed URLs. */
   FEED_URLS: z
     .string()
@@ -29,13 +38,23 @@ const serverEnvSchema = z.object({
   CRON_SECRET: z.string().min(32),
 });
 
+/** Requires only the selected provider's key, and fills in its default model. */
+export const serverEnvSchema = serverEnvObject
+  .superRefine((env, ctx) => {
+    const keyName = env.AI_PROVIDER === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+    if (!env[keyName]) ctx.addIssue({ code: "custom", path: [keyName], message: "Required for AI_PROVIDER" });
+  })
+  .transform((env) => ({ ...env, POST_MODEL: env.POST_MODEL ?? DEFAULT_MODELS[env.AI_PROVIDER] }));
+
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 let cached: ServerEnv | null = null;
 
 export function getServerEnv(): ServerEnv {
   if (cached) return cached;
-  const parsed = serverEnvSchema.safeParse(process.env);
+  // A blank variable (e.g. `POST_MODEL=`) means "not set", so defaults apply.
+  const present = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined && v.trim() !== ""));
+  const parsed = serverEnvSchema.safeParse(present);
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
     // Names only, never values.

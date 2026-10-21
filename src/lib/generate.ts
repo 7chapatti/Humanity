@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import type OpenAI from "openai";
 import { z } from "zod";
 import type { Headline } from "./news";
 import { PERSONA_PROMPT } from "./persona";
@@ -94,9 +95,83 @@ export function parseDrafts(raw: unknown, headlines: Headline[], max: number): D
   return drafts;
 }
 
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+}
+
+/**
+ * One model call: persona as the system prompt, the batch request as the user
+ * message, JSON forced to OUTPUT_SCHEMA. Returns the raw JSON text.
+ * Each provider is a small adapter, so the persona stays identical across them.
+ */
+export type ModelCaller = (req: { system: string; user: string }) => Promise<{ text: string; usage: Usage }>;
+
+const MAX_OUTPUT_TOKENS = 8000;
+
+export function anthropicCaller(client: Pick<Anthropic, "messages">, model: string): ModelCaller {
+  return async ({ system, user }) => {
+    const response = await client.messages.create({
+      model,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      // Identical on every call, so it is cached and billed at the read rate.
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: user }],
+      output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
+    });
+    if (response.stop_reason === "refusal") throw new Error("Model declined this batch");
+    if (response.stop_reason === "max_tokens") throw new Error("Model output was cut off; raise max_tokens");
+    const block = response.content.find((b) => b.type === "text");
+    if (!block || block.type !== "text") throw new Error("Model returned no text");
+    return {
+      text: block.text,
+      usage: {
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+        cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      },
+    };
+  };
+}
+
+export function openaiCaller(client: Pick<OpenAI, "responses">, model: string): ModelCaller {
+  return async ({ system, user }) => {
+    const response = await client.responses.create({
+      model,
+      max_output_tokens: MAX_OUTPUT_TOKENS,
+      // Same persona text every call; OpenAI caches long identical prefixes automatically.
+      instructions: system,
+      input: user,
+      // Drafts are reviewed in /admin; nothing needs storing on OpenAI's side.
+      store: false,
+      text: { format: { type: "json_schema", name: "draft_posts", schema: OUTPUT_SCHEMA, strict: true } },
+    });
+    if (response.status === "incomplete") {
+      throw new Error(
+        response.incomplete_details?.reason === "max_output_tokens"
+          ? "Model output was cut off; raise max_tokens"
+          : "Model declined this batch",
+      );
+    }
+    const refused = response.output.some(
+      (item) => item.type === "message" && item.content.some((c) => c.type === "refusal"),
+    );
+    if (refused) throw new Error("Model declined this batch");
+    if (!response.output_text) throw new Error("Model returned no text");
+    return {
+      text: response.output_text,
+      usage: {
+        inputTokens: response.usage?.input_tokens ?? 0,
+        outputTokens: response.usage?.output_tokens ?? 0,
+        cacheReadTokens: response.usage?.input_tokens_details?.cached_tokens ?? 0,
+      },
+    };
+  };
+}
+
 export interface GenerateOptions {
-  client: Pick<Anthropic, "messages">;
-  model: string;
+  call: ModelCaller;
   headlines: Headline[];
   count: number;
   today?: string;
@@ -104,40 +179,21 @@ export interface GenerateOptions {
 
 export interface GenerateResult {
   drafts: DraftPost[];
-  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
+  usage: Usage;
 }
 
 export async function generateDrafts(opts: GenerateOptions): Promise<GenerateResult> {
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
-  const response = await opts.client.messages.create({
-    model: opts.model,
-    max_tokens: 8000,
-    system: [
-      // Identical on every call, so it is cached and billed at the read rate.
-      { type: "text", text: PERSONA_PROMPT, cache_control: { type: "ephemeral" } },
-    ],
-    messages: [{ role: "user", content: buildUserPrompt(opts.headlines, opts.count, today) }],
-    output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
+  const { text, usage } = await opts.call({
+    system: PERSONA_PROMPT,
+    user: buildUserPrompt(opts.headlines, opts.count, today),
   });
-
-  if (response.stop_reason === "refusal") throw new Error("Model declined this batch");
-  if (response.stop_reason === "max_tokens") throw new Error("Model output was cut off; raise max_tokens");
-
-  const text = response.content.find((b) => b.type === "text");
-  if (!text || text.type !== "text") throw new Error("Model returned no text");
 
   let json: unknown;
   try {
-    json = JSON.parse(text.text);
+    json = JSON.parse(text);
   } catch {
     throw new Error("Model output was not valid JSON");
   }
-  return {
-    drafts: parseDrafts(json, opts.headlines, opts.count),
-    usage: {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-    },
-  };
+  return { drafts: parseDrafts(json, opts.headlines, opts.count), usage };
 }

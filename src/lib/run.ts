@@ -1,7 +1,8 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { getFeedUrls, getServerEnv } from "./config";
-import { generateDrafts } from "./generate";
+import { anthropicCaller, generateDrafts, openaiCaller } from "./generate";
 import { fetchHeadlines } from "./news";
 import { createAdminClient } from "./supabase/admin";
 
@@ -47,7 +48,7 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
 
   const { data: run, error: runError } = await db
     .from("generation_runs")
-    .insert({ model: env.POST_MODEL })
+    .insert({ model: `${env.AI_PROVIDER}:${env.POST_MODEL}` })
     .select("id")
     .single();
   // 23505 = unique violation: another run holds the one-active-run slot.
@@ -59,10 +60,12 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
 
   try {
     const headlines = await fetchHeadlines(getFeedUrls(env));
-    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    const call =
+      env.AI_PROVIDER === "openai"
+        ? openaiCaller(new OpenAI({ apiKey: env.OPENAI_API_KEY }), env.POST_MODEL)
+        : anthropicCaller(new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }), env.POST_MODEL);
     const { drafts, usage } = await generateDrafts({
-      client,
-      model: env.POST_MODEL,
+      call,
       headlines,
       count: env.POSTS_PER_RUN,
     });

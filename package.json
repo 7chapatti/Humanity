@@ -17,6 +17,7 @@
     "fast-xml-parser": "^5.11.2",
     "geist": "^1.8.1",
     "next": "16.4.2",
+    "openai": "^7.41.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
