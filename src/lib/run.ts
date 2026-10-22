@@ -1,10 +1,40 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
+import { pickBalanced } from "./balance";
 import { getFeedUrls, getServerEnv } from "./config";
-import { anthropicCaller, generateDrafts, openaiCaller } from "./generate";
-import { fetchHeadlines } from "./news";
+import { generateDrafts } from "./generate";
+import { createCaller } from "./models";
+import { fetchHeadlines, type Headline } from "./news";
 import { createAdminClient } from "./supabase/admin";
+
+const HEADLINE_WINDOW_HOURS = 48;
+const HEADLINES_PER_RUN = 40;
+
+interface RecentArticle {
+  title: string;
+  url: string;
+  sources: { name: string } | { name: string }[] | null;
+}
+
+/**
+ * Recent stored articles, taking turns across outlets so no source dominates.
+ * Falls back to fetching the FEED_URLS feeds while the articles table is empty.
+ */
+async function recentHeadlines(db: ReturnType<typeof createAdminClient>, feedUrls: string[]): Promise<Headline[]> {
+  const since = new Date(Date.now() - HEADLINE_WINDOW_HOURS * 3_600_000).toISOString();
+  const { data } = await db
+    .from("articles")
+    .select("title, url, sources(name)")
+    .gte("fetched_at", since)
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(400)
+    .returns<RecentArticle[]>();
+  const headlines: Headline[] = (data ?? []).map((a) => {
+    const source = Array.isArray(a.sources) ? a.sources.at(0) : a.sources;
+    return { title: a.title, link: a.url, source: source?.name ?? "unknown" };
+  });
+  if (headlines.length > 0) return pickBalanced(headlines, (h) => h.source, HEADLINES_PER_RUN);
+  return fetchHeadlines(feedUrls);
+}
 
 /** A run older than this with no finish time is treated as crashed. */
 const STALE_RUN_MINUTES = 10;
@@ -59,13 +89,9 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
   }
 
   try {
-    const headlines = await fetchHeadlines(getFeedUrls(env));
-    const call =
-      env.AI_PROVIDER === "openai"
-        ? openaiCaller(new OpenAI({ apiKey: env.OPENAI_API_KEY }), env.POST_MODEL)
-        : anthropicCaller(new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }), env.POST_MODEL);
+    const headlines = await recentHeadlines(db, getFeedUrls(env));
     const { drafts, usage } = await generateDrafts({
-      call,
+      call: createCaller(env, env.POST_MODEL),
       headlines,
       count: env.POSTS_PER_RUN,
     });

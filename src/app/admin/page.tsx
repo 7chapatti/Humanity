@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth";
 import { FLAG_LABELS, type SafetyFlag } from "@/lib/safety";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { signOut } from "../login/actions";
+import { AdminHeader } from "./admin-header";
 import { generateNow, markPosted, reviewPost } from "./actions";
 import { CopyButton } from "./copy-button";
 
@@ -100,21 +100,16 @@ async function AdminContent({ searchParams }: Pick<PageProps<"/admin">, "searchP
 
   return (
     <>
-      <header>
-        <h1>Humanity AI</h1>
-        <nav aria-label="Post status">
+      <AdminHeader current="/admin" />
+
+      <main>
+        <nav aria-label="Post status" className="filters">
           {STATUSES.map((s) => (
             <Link key={s} href={`/admin?status=${s}`} aria-current={s === status ? "page" : undefined}>
               {STATUS_LABELS[s]}
             </Link>
           ))}
         </nav>
-        <form action={signOut}>
-          <button type="submit">Sign out</button>
-        </form>
-      </header>
-
-      <main>
         {message && (
           <p className={message.error ? "notice error" : "notice"} role="alert">
             {message.text}

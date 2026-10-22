@@ -11,6 +11,13 @@ export const DEFAULT_MODELS = {
   openai: "gpt-5.4-mini-2026-03-17",
 } as const;
 
+/** Cheapest tier for high-volume classification. Both are in the providers' cheap ranges. */
+export const DEFAULT_TAG_MODELS = {
+  anthropic: "claude-haiku-5-5",
+  // In OpenAI's larger complimentary-tokens group (2.5M/day at tiers 1-2).
+  openai: "gpt-5.4-nano-2026-03-17",
+} as const;
+
 const serverEnvObject = z.object({
   /** Which API writes the posts. The persona is identical either way. */
   AI_PROVIDER: z.enum(["anthropic", "openai"]).default("anthropic"),
@@ -18,12 +25,12 @@ const serverEnvObject = z.object({
   OPENAI_API_KEY: z.string().min(1).optional(),
   /** Model for the weekly batch. Defaults per provider (DEFAULT_MODELS). */
   POST_MODEL: z.string().min(1).optional(),
-  /** Comma-separated https RSS feed URLs. */
+  /** Model for tagging articles. Defaults per provider (DEFAULT_TAG_MODELS). */
+  TAG_MODEL: z.string().min(1).optional(),
+  /** Fallback feeds, used only while the articles table is empty. Sources live in the database. */
   FEED_URLS: z
     .string()
-    .default(
-      "https://feeds.bbci.co.uk/news/world/rss.xml,https://www.theguardian.com/world/rss",
-    ),
+    .default("https://feeds.skynews.com/feeds/rss/world.xml,https://feeds.npr.org/1004/rss.xml"),
   /** How many draft posts each run asks for. */
   POSTS_PER_RUN: z.coerce.number().int().min(1).max(30).default(3),
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
@@ -44,7 +51,11 @@ export const serverEnvSchema = serverEnvObject
     const keyName = env.AI_PROVIDER === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
     if (!env[keyName]) ctx.addIssue({ code: "custom", path: [keyName], message: "Required for AI_PROVIDER" });
   })
-  .transform((env) => ({ ...env, POST_MODEL: env.POST_MODEL ?? DEFAULT_MODELS[env.AI_PROVIDER] }));
+  .transform((env) => ({
+    ...env,
+    POST_MODEL: env.POST_MODEL ?? DEFAULT_MODELS[env.AI_PROVIDER],
+    TAG_MODEL: env.TAG_MODEL ?? DEFAULT_TAG_MODELS[env.AI_PROVIDER],
+  }));
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 

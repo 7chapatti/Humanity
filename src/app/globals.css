@@ -248,3 +248,71 @@ body > footer {
 section.runs {
   overflow-x: auto;
 }
+
+/* ---------- Phase 2 admin pages ---------- */
+
+nav.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+nav.filters a[aria-current="page"] {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+select {
+  padding: 0.5rem 0.6rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+form.inline {
+  align-items: center;
+}
+
+form.inline label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+form.inline input[type="checkbox"] {
+  width: auto;
+}
+
+article h3 a {
+  font-family: var(--sans);
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+dl.tags {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  font-size: 0.85rem;
+}
+
+dl.tags dt {
+  color: var(--muted);
+}
+
+th[scope="row"] {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

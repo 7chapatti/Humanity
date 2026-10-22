@@ -1,5 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { cleanTitle, dedupeHeadlines, parseFeed } from "@/lib/news";
+import { cleanTitle, dedupeHeadlines, parseDate, parseFeed, readCapped } from "@/lib/news";
+
+describe("parseFeed extra fields", () => {
+  it("reads RSS summaries and dates", () => {
+    const xml = `<rss version="2.0"><channel><item><title>A</title><link>https://x.com/a</link>
+      <description><![CDATA[<p>Short &amp; <b>sharp</b>.</p>]]></description><pubDate>Wed, 21 Oct 2026 20:22:48 -0400</pubDate></item></channel></rss>`;
+    const [item] = parseFeed(xml, "X");
+    expect(item.summary).toBe("Short & sharp .");
+    expect(item.publishedAt).toBe("2026-10-22T00:22:48.000Z");
+  });
+
+  it("reads Atom links from href, preferring rel=alternate, and typed titles", () => {
+    const xml = `<feed xmlns="http://www.w3.org/2005/Atom"><entry><title type="html">Vote</title>
+      <link rel="self" href="https://x.com/self"/><link rel="alternate" href="https://x.com/story"/>
+      <summary>Due Thursday.</summary><updated>2026-10-21T10:00:00Z</updated></entry></feed>`;
+    const [item] = parseFeed(xml, "X");
+    expect(item).toMatchObject({ title: "Vote", link: "https://x.com/story", summary: "Due Thursday." });
+    expect(item.publishedAt).toBe("2026-10-21T10:00:00.000Z");
+  });
+});
+
+describe("parseDate", () => {
+  const now = Date.parse("2026-10-22T12:00:00Z");
+  it("rejects junk and far-future dates", () => {
+    expect(parseDate("yesterday-ish", now)).toBeNull();
+    expect(parseDate("2027-01-01T00:00:00Z", now)).toBeNull();
+    expect(parseDate(undefined, now)).toBeNull();
+  });
+});
+
+describe("readCapped", () => {
+  it("reads small bodies and refuses oversized ones without buffering them", async () => {
+    expect(await readCapped(new Response("hello"), 10)).toBe("hello");
+    await expect(readCapped(new Response("x".repeat(20)), 10)).rejects.toThrow("too large");
+    await expect(
+      readCapped(new Response("x", { headers: { "content-length": "999999" } }), 10),
+    ).rejects.toThrow("too large");
+  });
+});
 
 const RSS = `<?xml version="1.0"?>
 <rss version="2.0"><channel><title>Test</title>

@@ -6,8 +6,17 @@ Every Monday, Wednesday and Friday it reads world news feeds, writes three draft
 
 ## How it works
 
+**Information pipeline (every 2 hours, scheduled by Supabase Cron → `POST /api/jobs/pipeline`):**
+
+- **Ingest** (`src/lib/jobs/ingest.ts`): fetches every active source in the `sources` table (https only, 10 s timeout, 2 MB streamed cap, no XML entity expansion), normalises links (tracking parameters stripped), skips items older than a week, stores title, link, summary and date. Never full article text.
+- **Tag** (`src/lib/jobs/tag.ts`): the cheap model (`TAG_MODEL`) labels each article with a topic, region, up to 5 names and up to 3 patterns from a fixed list (`src/lib/taxonomy.ts`). Batches of 40, up to 200 a run, failed batches retried up to 3 times.
+- **Cleanup**: deletes articles and job logs older than 90 days to stay inside the free database.
+- Each step writes a `job_runs` row (counts, tokens, errors), shown on `/admin/jobs`. One run per job at a time, enforced by the database.
+
+**Posts:**
+
 1. **Scheduler** (Vercel Cron, Mon/Wed/Fri 06:17 UTC) calls `GET /api/generate` with `Authorization: Bearer $CRON_SECRET`.
-2. **News**: headlines are pulled from the RSS/Atom feeds in `FEED_URLS` (https only, 10 s timeout, 2 MB cap, no XML entity expansion).
+2. **News**: the 40 most recent stored articles from the last 48 hours, taking turns across outlets so no source dominates. Falls back to fetching `FEED_URLS` only while the articles table is empty.
 3. **Generation**: one Claude call writes the whole batch. The persona (`src/lib/persona.ts`) is sent as a cached system prompt, so repeat runs pay the cheap cache-read rate for it. Output is forced into a JSON schema and validated again with zod.
 4. **Safety checks** (`src/lib/safety.ts`) flag drafts that break voice rules or hard limits, such as a date next to harm language. Flags show on the approval page.
 5. **Approval** at `/admin`: edit the text, approve or reject, copy, mark as posted. You can also run a batch on demand.
@@ -19,7 +28,9 @@ Cost per run is logged (input, cached and output tokens) in the runs table on `/
 ### 1. Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Apply the schema: `npx supabase link --project-ref <ref>` then `npx supabase db push`, or paste `supabase/migrations/20261020000000_init.sql` into the SQL editor.
+2. Apply the schema: `npx supabase link --project-ref <ref>` then `npx supabase db push`, or paste each file in `supabase/migrations/` into the SQL editor, in order.
+   - The schedule migration calls the live site address; change the URL in `20261022000100_schedule_pipeline.sql` if yours differs.
+   - **Integrations → Vault → Add new secret**: name `cron_secret`, value = the same `CRON_SECRET` as in Vercel. The scheduled call reads it at run time, so the secret never sits in code.
 3. **Authentication → Sign In / Providers**: turn **off** "Allow new users to sign up".
 4. **Authentication → Users**: add your admin email as a user ("Add user" → "Send invitation" or create it).
 5. **Authentication → URL Configuration**: set Site URL to your `SITE_URL` and add `<SITE_URL>/auth/confirm` to the redirect allow list.
@@ -74,5 +85,6 @@ npm run build      # production build
 - **Provider**: set `AI_PROVIDER` to `anthropic` or `openai`, plus that provider's API key. The persona and output format are identical either way (`src/lib/generate.ts` has one small adapter per provider).
 - **Model**: set `POST_MODEL`, or leave it empty for the provider's default.
 - **Voice**: edit `src/lib/persona.ts`. Keep it free of dates or per-run values so it stays cacheable.
-- **Feeds**: set `FEED_URLS`.
+- **Feeds**: add, pause or resume them on `/admin/sources`. Check each outlet's feed terms before commercial use. The starting 11 were checked reachable on 22 Oct 2026 and none disallow bots.
+- **Tagging model**: set `TAG_MODEL`, or leave it empty for the provider's cheapest default.
 - **Batch size**: set `POSTS_PER_RUN` (max 30).
