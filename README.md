@@ -2,11 +2,11 @@
 
 An AI that watches humanity and posts about it. This repo is phase 1: the **post generator**.
 
-Once a week it reads world news feeds, writes a batch of draft posts in the Humanity AI voice, and saves them for approval. You review, edit, approve or reject each one at `/admin`, then copy approved posts into your scheduler. **Nothing is ever published automatically.**
+Every Monday, Wednesday and Friday it reads world news feeds, writes three draft posts in the Humanity AI voice, and saves them for approval; you pick the best one or two. You review, edit, approve or reject each one at `/admin`, then copy approved posts into your scheduler. **Nothing is ever published automatically.**
 
 ## How it works
 
-1. **Scheduler** (Vercel Cron, Mondays 06:17 UTC) calls `GET /api/generate` with `Authorization: Bearer $CRON_SECRET`.
+1. **Scheduler** (Vercel Cron, Mon/Wed/Fri 06:17 UTC) calls `GET /api/generate` with `Authorization: Bearer $CRON_SECRET`.
 2. **News**: headlines are pulled from the RSS/Atom feeds in `FEED_URLS` (https only, 10 s timeout, 2 MB cap, no XML entity expansion).
 3. **Generation**: one Claude call writes the whole batch. The persona (`src/lib/persona.ts`) is sent as a cached system prompt, so repeat runs pay the cheap cache-read rate for it. Output is forced into a JSON schema and validated again with zod.
 4. **Safety checks** (`src/lib/safety.ts`) flag drafts that break voice rules or hard limits, such as a date next to harm language. Flags show on the approval page.
@@ -65,7 +65,7 @@ npm run build      # production build
 - The sign-in form only sends a link to `ADMIN_EMAIL`, and shows everyone the same message, so it does not reveal which address is the admin's.
 - The cron secret is compared in constant time. Error details stay in logs and the runs table, never in HTTP responses.
 - Headlines are treated as untrusted: escaped before reaching the model, and the persona tells it to ignore instructions inside them.
-- A database index allows only one unfinished run at a time, and scheduled runs skip if one succeeded in the last 6 days, so duplicate cron deliveries cannot double-spend.
+- A database index allows only one unfinished run at a time, and scheduled runs skip if one succeeded in the last 20 hours, so duplicate cron deliveries cannot double-spend.
 - Security headers (frame denial, nosniff, HSTS, referrer and permissions policies) are set in `next.config.ts`.
 - `npm audit` reports advisories in ESLint's dev-only tooling (a glob-pattern denial of service). They are not shipped, and the suggested fix downgrades `eslint-config-next` two major versions, so they are left until upstream updates. `npm audit --omit=dev` is clean.
 

@@ -62,7 +62,7 @@ export function buildUserPrompt(headlines: Headline[], count: number, today: str
   return [
     `Today is ${today}.`,
     `<headlines>\n${list}\n</headlines>`,
-    `Write ${count} draft posts for the coming week. Use the headlines where they fit; a few posts may be general observations of humanity (headline_index -1).`,
+    `Write ${count} draft posts for the next two days; the best one or two will be picked. Use the headlines where they fit; a few posts may be general observations of humanity (headline_index -1).`,
   ].join("\n\n");
 }
 

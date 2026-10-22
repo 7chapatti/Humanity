@@ -6,7 +6,7 @@ import { runGeneration } from "@/lib/run";
 export const maxDuration = 300;
 
 /**
- * Weekly batch, called by the scheduler (vercel.json) with
+ * Small batch (Mon, Wed, Fri), called by the scheduler (vercel.json) with
  * `Authorization: Bearer <CRON_SECRET>`. Nothing is published: every draft
  * waits for approval on /admin.
  */

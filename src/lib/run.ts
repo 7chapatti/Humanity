@@ -9,7 +9,7 @@ import { createAdminClient } from "./supabase/admin";
 /** A run older than this with no finish time is treated as crashed. */
 const STALE_RUN_MINUTES = 10;
 /** Scheduled runs skip if a successful run happened within this window. */
-const MIN_DAYS_BETWEEN_SCHEDULED_RUNS = 6;
+const MIN_HOURS_BETWEEN_SCHEDULED_RUNS = 20;
 
 export type RunOutcome =
   | { status: "done"; runId: string; drafts: number }
@@ -35,7 +35,7 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
     .lt("started_at", staleCutoff);
 
   if (!force) {
-    const recentCutoff = new Date(now - MIN_DAYS_BETWEEN_SCHEDULED_RUNS * 86_400_000).toISOString();
+    const recentCutoff = new Date(now - MIN_HOURS_BETWEEN_SCHEDULED_RUNS * 3_600_000).toISOString();
     const { data: recent } = await db
       .from("generation_runs")
       .select("id")

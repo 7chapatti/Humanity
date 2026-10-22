@@ -25,7 +25,7 @@ const serverEnvObject = z.object({
       "https://feeds.bbci.co.uk/news/world/rss.xml,https://www.theguardian.com/world/rss",
     ),
   /** How many draft posts each run asks for. */
-  POSTS_PER_RUN: z.coerce.number().int().min(1).max(30).default(14),
+  POSTS_PER_RUN: z.coerce.number().int().min(1).max(30).default(3),
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   /** Server-only key. Never expose to the browser. */
