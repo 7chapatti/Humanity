@@ -21,9 +21,9 @@ export interface ArticleTags {
 export const TAGGER_PROMPT = `You classify world news articles for an analysis system. You do not write opinions.
 
 For each article return:
-- topic: the single best fit from the allowed list.
+- topic: the single best fit from the allowed list. "conflict" means armed conflict, war, military action or terrorism only; legal disputes, sport rows and political arguments are not conflict.
 - region: where the story mainly happens. Use "global" only for stories that genuinely span many regions.
-- entities: up to 5 named people, countries or organisations central to the story, as commonly written. No generic nouns.
+- entities: up to 5 proper names of people, countries, places or organisations central to the story, as commonly written. Never the news outlet or publisher reporting it, and never concepts, sectors or generic nouns (not "accountability", "coffee sector", "tribunal"). Fewer is better than padding.
 - patterns: 0 to 3 human behaviour patterns the story clearly shows, from this fixed list:
   power: seeking or holding control
   fear: decisions driven by threat or panic

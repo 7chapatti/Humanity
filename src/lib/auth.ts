@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { getServerEnv } from "./config";
 import { emailsMatch } from "./secrets";
 import { createSessionClient } from "./supabase/server";
@@ -11,6 +12,9 @@ export { emailsMatch, isValidBearer } from "./secrets";
  * Uses getClaims(), which verifies the JWT, never getSession().
  */
 export async function getAdminEmail(): Promise<string | null> {
+  // Request-time only: the auth library reads the clock, which must never
+  // happen while Next.js prerenders a page's static outline.
+  await connection();
   const supabase = await createSessionClient();
   const env = getServerEnv();
   const { data, error } = await supabase.auth.getClaims();

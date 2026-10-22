@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPipelineNow } from "../actions";
 import { AdminHeader } from "../admin-header";
+import { SubmitButton } from "../submit-button";
 
 export const metadata: Metadata = {
   title: "Jobs — Humanity AI",
@@ -63,7 +64,6 @@ export default function JobsPage(props: PageProps<"/admin/jobs">) {
 async function JobsContent({ searchParams }: Pick<PageProps<"/admin/jobs">, "searchParams">) {
   await requireAdmin();
   const params = await searchParams;
-  const failed = typeof params.failed === "string" ? params.failed.split(",").filter((j) => j in JOB_LABELS) : [];
 
   const db = createAdminClient();
   const [{ data: runs, error }, week] = await Promise.all([
@@ -80,14 +80,9 @@ async function JobsContent({ searchParams }: Pick<PageProps<"/admin/jobs">, "sea
     <>
       <AdminHeader current="/admin/jobs" />
       <main>
-        {params.ran === "1" && (
+        {params.started === "1" && (
           <p className="notice" role="status">
-            Pipeline finished. Results are below.
-          </p>
-        )}
-        {failed.length > 0 && (
-          <p className="notice error" role="alert">
-            Failed: {failed.map((j) => JOB_LABELS[j].name).join(", ")}. The error is in the table below.
+            Pipeline started. It takes about a minute; refresh this page to see each step appear below.
           </p>
         )}
 
@@ -98,7 +93,7 @@ async function JobsContent({ searchParams }: Pick<PageProps<"/admin/jobs">, "sea
             under 5% failed runs over a week. Last 7 days: <strong>{week.failed}</strong> failed of <strong>{week.total}</strong>.
           </p>
           <form action={runPipelineNow} className="inline">
-            <button type="submit">Run the pipeline now</button>
+            <SubmitButton idle="Run the pipeline now" pending="Starting…" />
           </form>
           {error && <p className="error">Could not load job runs.</p>}
           {runs?.length === 0 && <p>No runs yet.</p>}

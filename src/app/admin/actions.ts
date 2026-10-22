@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { runPipeline } from "@/lib/jobs/pipeline";
@@ -67,13 +68,17 @@ export async function markPosted(formData: FormData) {
   revalidatePath("/admin");
 }
 
-/** Runs ingest, tagging and cleanup now instead of waiting for the 2-hourly schedule. */
+/**
+ * Starts ingest, tagging and cleanup in the background and returns at once;
+ * progress shows in the jobs table. A second click while it runs is skipped
+ * by the one-run-per-job rule in the database.
+ */
 export async function runPipelineNow() {
   await requireAdmin();
-  const outcomes = await runPipeline();
-  revalidatePath("/admin/jobs");
-  const failed = outcomes.filter((o) => o.status === "failed").map((o) => o.job);
-  redirect(failed.length ? `/admin/jobs?failed=${failed.join(",")}` : "/admin/jobs?ran=1");
+  after(async () => {
+    await runPipeline();
+  });
+  redirect("/admin/jobs?started=1");
 }
 
 const toggleSchema = z.object({ id: z.uuid(), active: z.enum(["true", "false"]) });

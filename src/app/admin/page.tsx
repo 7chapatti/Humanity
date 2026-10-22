@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { AdminHeader } from "./admin-header";
 import { generateNow, markPosted, reviewPost } from "./actions";
 import { CopyButton } from "./copy-button";
+import { SubmitButton } from "./submit-button";
 
 export const metadata: Metadata = {
   title: "Approvals — Humanity AI",
@@ -186,7 +187,7 @@ async function AdminContent({ searchParams }: Pick<PageProps<"/admin">, "searchP
         <section aria-labelledby="runs-heading" className="runs">
           <h2 id="runs-heading">Recent runs</h2>
           <form action={generateNow} className="inline">
-            <button type="submit">Generate a batch now</button>
+            <SubmitButton idle="Generate a batch now" pending="Writing drafts… about a minute" />
           </form>
           {runs && runs.length > 0 ? (
             <table>

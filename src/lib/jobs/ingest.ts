@@ -5,6 +5,13 @@ import { normalizeUrl } from "../url";
 import type { Db, JobResult } from "./runner";
 
 const MAX_ITEMS_PER_SOURCE = 50;
+
+/** Roundups and bulletins, not stories: they add noise to tags and threads. */
+const ROUNDUP_TITLE = /\b(news bulletin|news in brief|all of africa today|morning briefing|evening briefing|live updates|as it happened|week in pictures)\b/i;
+
+export function isRoundup(title: string): boolean {
+  return ROUNDUP_TITLE.test(title);
+}
 const MAX_AGE_DAYS = 7;
 const CONCURRENT_FEEDS = 4;
 
@@ -26,7 +33,7 @@ export function toArticleRows(items: FeedItem[], sourceId: string, now = Date.no
   const rows: ArticleRow[] = [];
   for (const item of items.slice(0, MAX_ITEMS_PER_SOURCE)) {
     const url = normalizeUrl(item.link);
-    if (!url || seen.has(url)) continue;
+    if (!url || seen.has(url) || isRoundup(item.title)) continue;
     if (item.publishedAt && Date.parse(item.publishedAt) < cutoff) continue;
     seen.add(url);
     rows.push({

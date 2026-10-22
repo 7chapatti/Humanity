@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { pickBalanced } from "@/lib/balance";
 import { chunk, mapLimit } from "@/lib/concurrency";
-import { toArticleRows } from "@/lib/jobs/ingest";
+import { isRoundup, toArticleRows } from "@/lib/jobs/ingest";
+
+describe("isRoundup", () => {
+  it("skips bulletins and digests, keeps stories", () => {
+    expect(isRoundup("Latest news bulletin | October 21st, 2026 – Evening")).toBe(true);
+    expect(isRoundup("Africa: All of Africa Today - October 22, 2026")).toBe(true);
+    expect(isRoundup("Ukraine war live updates: talks resume")).toBe(true);
+    expect(isRoundup("Central bank holds rates as inflation eases")).toBe(false);
+    expect(isRoundup("Bulletin board scheme helps refugees find homes")).toBe(false);
+  });
+});
 import type { FeedItem } from "@/lib/news";
 
 describe("pickBalanced", () => {
