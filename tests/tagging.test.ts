@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildTagPrompt, parseTags, tagBatch, TAGGER_PROMPT, type ArticleToTag } from "@/lib/tagging";
+import { buildTagPrompt, cleanEntities, parseTags, tagBatch, TAGGER_PROMPT, type ArticleToTag } from "@/lib/tagging";
+
+describe("cleanEntities", () => {
+  it("keeps proper names, drops common nouns and contained duplicates", () => {
+    expect(
+      cleanEntities(["Tesla", "Elon Musk", "Musk", "coffee", "smallholder farmers", "Lahore High Court", "G7", "  Tesla "]),
+    ).toEqual(["Tesla", "Elon Musk", "Lahore High Court", "G7"]);
+  });
+
+  it("handles accented capitals and caps at five", () => {
+    expect(cleanEntities(["Élysée", "Ödön", "A", "B", "C", "D"])).toEqual(["Élysée", "Ödön", "A", "B", "C"]);
+  });
+});
 
 const articles: ArticleToTag[] = [
   { id: "a1", title: "Ceasefire talks stall again", summary: "Both sides blame the other.", outlet: "Al Jazeera" },

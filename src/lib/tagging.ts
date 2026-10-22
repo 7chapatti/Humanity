@@ -21,7 +21,7 @@ export interface ArticleTags {
 export const TAGGER_PROMPT = `You classify world news articles for an analysis system. You do not write opinions.
 
 For each article return:
-- topic: the single best fit from the allowed list. "conflict" means armed conflict, war, military action or terrorism only; legal disputes, sport rows and political arguments are not conflict.
+- topic: the single best fit from the allowed list. "conflict" means armed conflict, war, military action or terrorism only; crime, court cases, legal disputes, sport rows and political arguments are not conflict (crime and courts are "society").
 - region: where the story mainly happens. Use "global" only for stories that genuinely span many regions.
 - entities: up to 5 proper names of people, countries, places or organisations central to the story, as commonly written. Never the news outlet or publisher reporting it, and never concepts, sectors or generic nouns (not "accountability", "coffee sector", "tribunal"). Fewer is better than padding.
 - patterns: 0 to 3 human behaviour patterns the story clearly shows, from this fixed list:
@@ -92,6 +92,21 @@ export function buildTagPrompt(articles: ArticleToTag[]): string {
 }
 
 /**
+ * Deterministic clean-up after the model: proper names only (they start with
+ * a capital letter or digit), no duplicates, and no name that is just a
+ * word of a longer one ("Musk" when "Elon Musk" is there). Max 5, 80 chars each.
+ */
+export function cleanEntities(raw: string[]): string[] {
+  const names = [...new Set(raw.map((e) => e.replace(/\s+/g, " ").trim()))].filter(
+    (e) => e.length > 0 && e.length <= 80 && /^[\p{Lu}\p{N}]/u.test(e),
+  );
+  const kept = names.filter(
+    (name) => !names.some((other) => other !== name && other.split(" ").includes(name)),
+  );
+  return kept.slice(0, 5);
+}
+
+/**
  * Validates the model's tags and maps them back to article ids. Unknown
  * patterns are dropped, entities are trimmed, de-duplicated and capped at 5,
  * and items with an out-of-range or repeated index are ignored.
@@ -105,9 +120,7 @@ export function parseTags(raw: unknown, articles: ArticleToTag[]): ArticleTags[]
   for (const item of parsed.data.items) {
     if (item.index < 0 || item.index >= articles.length || done.has(item.index)) continue;
     done.add(item.index);
-    const entities = [
-      ...new Set(item.entities.map((e) => e.replace(/\s+/g, " ").trim()).filter((e) => e && e.length <= 80)),
-    ].slice(0, 5);
+    const entities = cleanEntities(item.entities);
     const patterns = [
       ...new Set(item.patterns.map((p) => p.trim().toLowerCase()).filter((p): p is Pattern => PATTERNS.includes(p as Pattern))),
     ].slice(0, 3);
