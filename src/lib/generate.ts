@@ -75,7 +75,7 @@ export function buildUserPrompt(stories: Story[], count: number, today: string, 
     `Today is ${today}.`,
     `<headlines>\n${stories.map(storyLine).join("\n")}\n</headlines>`,
     observations ? `<observations>\n${escapeForPrompt(observations)}\n</observations>` : null,
-    `Write ${count} draft posts for the next two days; the best one or two will be picked. Choose the stories that reveal the most about human behaviour, not simply the biggest. A post may instead be a general observation of humanity or draw on <observations> (headline_index -1).`,
+    `Write ${count} draft posts for the next two days; the best one or two will be picked. Speak as the character about the choices these stories show, not about the events. A post may instead be a general reflection on humanity or on what you noticed this week (headline_index -1).`,
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -40,8 +40,12 @@ export function cleanText(raw: unknown, max: number): string | null {
   if (value === null) return null;
   const text = value
     .replace(/<[^>]*>/g, " ")
-    .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, e: string) =>
-      ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'", nbsp: " " })[e] ?? "",
+    .replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));/gi, (_, hex: string | undefined, dec: string | undefined) => {
+      const code = hex ? Number.parseInt(hex, 16) : Number(dec);
+      return code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff) ? String.fromCodePoint(code) : "";
+    })
+    .replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_, e: string) =>
+      ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " })[e] ?? "",
     )
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/\s+/g, " ")

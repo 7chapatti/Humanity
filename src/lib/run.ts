@@ -1,10 +1,10 @@
 import "server-only";
-import { pickBalanced } from "./balance";
 import { getFeedUrls, getServerEnv } from "./config";
 import { generateDrafts, type Story } from "./generate";
 import { createCaller } from "./models";
 import { fetchHeadlines } from "./news";
 import { formatObservations } from "./observations";
+import { selectStories } from "./selection";
 import { createAdminClient } from "./supabase/admin";
 
 const HEADLINE_WINDOW_HOURS = 48;
@@ -18,23 +18,26 @@ interface RecentArticle {
   summary: string | null;
   topic: string | null;
   patterns: string[];
+  entities: string[];
   sources: { name: string } | { name: string }[] | null;
 }
 
 /**
- * Recent stored articles, taking turns across outlets so no source dominates.
- * Falls back to fetching the FEED_URLS feeds while the articles table is empty.
+ * The tagged stories from the last two days most worth commenting on (see
+ * selection.ts). Falls back to fetching the FEED_URLS feeds while the
+ * articles table is empty.
  */
 async function recentHeadlines(db: ReturnType<typeof createAdminClient>, feedUrls: string[]): Promise<Story[]> {
   const since = new Date(Date.now() - HEADLINE_WINDOW_HOURS * 3_600_000).toISOString();
   const { data } = await db
     .from("articles")
-    .select("title, url, summary, topic, patterns, sources(name)")
+    .select("title, url, summary, topic, patterns, entities, sources(name)")
     .gte("fetched_at", since)
+    .not("tagged_at", "is", null)
     .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(400)
+    .limit(800)
     .returns<RecentArticle[]>();
-  const headlines: Story[] = (data ?? []).map((a) => {
+  const stories = (data ?? []).map((a) => {
     const source = Array.isArray(a.sources) ? a.sources.at(0) : a.sources;
     return {
       title: a.title,
@@ -43,14 +46,19 @@ async function recentHeadlines(db: ReturnType<typeof createAdminClient>, feedUrl
       summary: a.summary,
       topic: a.topic,
       patterns: a.patterns,
+      entities: a.entities,
     };
   });
-  if (headlines.length > 0) return pickBalanced(headlines, (h) => h.source, HEADLINES_PER_RUN);
+  const picked = selectStories(stories, HEADLINES_PER_RUN);
+  if (picked.length > 0) {
+    return picked.map((s): Story => ({ title: s.title, link: s.link, source: s.source, summary: s.summary, topic: s.topic, patterns: s.patterns }));
+  }
   return fetchHeadlines(feedUrls);
 }
 
 /**
- * Week-level counts the writer may quote. Optional: if the stats query fails
+ * Week-level counts: background on what the character has been noticing,
+ * never quoted (the persona forbids it). Optional: if the stats query fails
  * the run carries on with headlines alone.
  */
 async function observations(db: ReturnType<typeof createAdminClient>): Promise<string | null> {

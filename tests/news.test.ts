@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cleanTitle, dedupeHeadlines, parseDate, parseFeed, readCapped } from "@/lib/news";
+import { cleanText } from "@/lib/news";
 
 describe("parseFeed extra fields", () => {
   it("reads RSS summaries and dates", () => {
@@ -99,5 +100,13 @@ describe("dedupeHeadlines", () => {
       { title: "Other", source: "a", link: null },
     ]);
     expect(out.map((h) => h.source + h.title)).toEqual(["aSame", "aOther"]);
+  });
+});
+
+describe("cleanText entities", () => {
+  it("decodes numeric entities and drops invalid ones", () => {
+    expect(cleanText("Trump&#039;s envoy &#x2014; &amp; &#8217;more&#8217; &#0; &#xD800;", 200)).toBe(
+      "Trump's envoy — & ’more’",
+    );
   });
 });
