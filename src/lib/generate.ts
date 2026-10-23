@@ -23,7 +23,7 @@ export interface DraftPost {
 }
 
 /** Sent to the API. The API grammar can't enforce lengths, so zod does below. */
-const OUTPUT_SCHEMA = {
+export const OUTPUT_SCHEMA = {
   type: "object",
   properties: {
     posts: {

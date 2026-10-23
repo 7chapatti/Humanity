@@ -3,6 +3,7 @@ import { signOut } from "../login/actions";
 
 const SECTIONS = [
   { href: "/admin", label: "Posts" },
+  { href: "/admin/character", label: "Character" },
   { href: "/admin/articles", label: "Articles" },
   { href: "/admin/sources", label: "Sources" },
   { href: "/admin/jobs", label: "Jobs" },

@@ -6,11 +6,19 @@ import { after } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { runPipeline } from "@/lib/jobs/pipeline";
-import { runGeneration } from "@/lib/run";
+import { STAGES } from "@/lib/character";
+import { runCharacterGeneration, runGeneration, type RunOutcome } from "@/lib/run";
 import { PERSPECTIVES, REGIONS } from "@/lib/taxonomy";
 import { isSafeFeedUrl } from "@/lib/url";
 import { checkPost } from "@/lib/safety";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { KIND_PATHS, POST_KINDS } from "./kinds";
+
+/** The review page a form came from; unknown values fall back to the news queue. */
+function returnPath(formData: FormData): string {
+  const kind = z.enum(POST_KINDS).safeParse(formData.get("kind"));
+  return KIND_PATHS[kind.success ? kind.data : "news"];
+}
 
 const reviewSchema = z.object({
   id: z.uuid(),
@@ -21,12 +29,13 @@ const reviewSchema = z.object({
 /** Approve or reject a draft, saving any edits made to its text. */
 export async function reviewPost(formData: FormData) {
   await requireAdmin();
+  const back = returnPath(formData);
   const parsed = reviewSchema.safeParse({
     id: formData.get("id"),
     decision: formData.get("decision"),
     content: formData.get("content"),
   });
-  if (!parsed.success) redirect("/admin?error=invalid");
+  if (!parsed.success) redirect(`${back}?error=invalid`);
 
   const { id, decision, content } = parsed.data;
   const db = createAdminClient();
@@ -42,9 +51,9 @@ export async function reviewPost(formData: FormData) {
     .in("status", ["draft", "approved"]);
   if (error) {
     console.error("Review failed:", error.message);
-    redirect("/admin?error=save");
+    redirect(`${back}?error=save`);
   }
-  revalidatePath("/admin");
+  revalidatePath(back);
 }
 
 const idSchema = z.uuid();
@@ -52,8 +61,9 @@ const idSchema = z.uuid();
 /** Record that an approved post has been published by hand. */
 export async function markPosted(formData: FormData) {
   await requireAdmin();
+  const back = returnPath(formData);
   const parsed = idSchema.safeParse(formData.get("id"));
-  if (!parsed.success) redirect("/admin?error=invalid");
+  if (!parsed.success) redirect(`${back}?error=invalid`);
 
   const db = createAdminClient();
   const { error } = await db
@@ -63,9 +73,9 @@ export async function markPosted(formData: FormData) {
     .eq("status", "approved");
   if (error) {
     console.error("Mark posted failed:", error.message);
-    redirect("/admin?status=approved&error=save");
+    redirect(`${back}?status=approved&error=save`);
   }
-  revalidatePath("/admin");
+  revalidatePath(back);
 }
 
 /**
@@ -121,12 +131,23 @@ export async function addSource(formData: FormData) {
   redirect("/admin/sources?added=1");
 }
 
-/** Manual run, bypassing the once-a-week guard (never the overlap guard). */
+function finishRun(outcome: RunOutcome, path: string): never {
+  revalidatePath(path);
+  if (outcome.status === "done") redirect(`${path}?generated=${outcome.drafts}`);
+  if (outcome.status === "skipped") redirect(`${path}?error=busy`);
+  redirect(`${path}?error=generate`);
+}
+
+/** Manual news run, bypassing the schedule guard (never the overlap guard). */
 export async function generateNow() {
   await requireAdmin();
-  const outcome = await runGeneration({ force: true });
-  revalidatePath("/admin");
-  if (outcome.status === "done") redirect(`/admin?generated=${outcome.drafts}`);
-  if (outcome.status === "skipped") redirect("/admin?error=busy");
-  redirect("/admin?error=generate");
+  finishRun(await runGeneration({ force: true }), KIND_PATHS.news);
+}
+
+/** Writes a batch of standalone character posts for the chosen stage. */
+export async function generateCharacterNow(formData: FormData) {
+  await requireAdmin();
+  const stage = z.enum(STAGES).safeParse(formData.get("stage"));
+  if (!stage.success) redirect(`${KIND_PATHS.character}?error=invalid`);
+  finishRun(await runCharacterGeneration(stage.data), KIND_PATHS.character);
 }

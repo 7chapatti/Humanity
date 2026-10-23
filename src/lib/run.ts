@@ -1,6 +1,8 @@
 import "server-only";
 import { getFeedUrls, getServerEnv } from "./config";
-import { generateDrafts, type Story } from "./generate";
+import { generateCharacterPosts, MAX_EARLIER, type Stage } from "./character";
+import { generateDrafts, type DraftPost, type Story } from "./generate";
+import type { Usage } from "./ai";
 import { createCaller } from "./models";
 import { fetchHeadlines } from "./news";
 import { formatObservations } from "./observations";
@@ -27,7 +29,7 @@ interface RecentArticle {
  * selection.ts). Falls back to fetching the FEED_URLS feeds while the
  * articles table is empty.
  */
-async function recentHeadlines(db: ReturnType<typeof createAdminClient>, feedUrls: string[]): Promise<Story[]> {
+async function recentHeadlines(db: Db, feedUrls: string[]): Promise<Story[]> {
   const since = new Date(Date.now() - HEADLINE_WINDOW_HOURS * 3_600_000).toISOString();
   const { data } = await db
     .from("articles")
@@ -61,7 +63,7 @@ async function recentHeadlines(db: ReturnType<typeof createAdminClient>, feedUrl
  * never quoted (the persona forbids it). Optional: if the stats query fails
  * the run carries on with headlines alone.
  */
-async function observations(db: ReturnType<typeof createAdminClient>): Promise<string | null> {
+async function observations(db: Db): Promise<string | null> {
   const { data, error } = await db.rpc("observer_stats", { window_days: OBSERVATION_WINDOW_DAYS });
   if (error) {
     console.error("observer_stats failed:", error.message);
@@ -72,25 +74,36 @@ async function observations(db: ReturnType<typeof createAdminClient>): Promise<s
 
 /** A run older than this with no finish time is treated as crashed. */
 const STALE_RUN_MINUTES = 10;
-/** Scheduled runs skip if a successful run happened within this window. */
+/** Scheduled news runs skip if a successful news run happened within this window. */
 const MIN_HOURS_BETWEEN_SCHEDULED_RUNS = 20;
+/** Character posts written per click. */
+const CHARACTER_POSTS_PER_RUN = 6;
+
+type Db = ReturnType<typeof createAdminClient>;
+type RunKind = "news" | "character";
 
 export type RunOutcome =
   | { status: "done"; runId: string; drafts: number }
   | { status: "skipped"; reason: "in_progress" | "recent_run" }
   | { status: "failed"; runId: string | null };
 
+interface Produced {
+  drafts: DraftPost[];
+  usage: Usage;
+  headlineCount: number;
+  stage?: Stage;
+}
+
 /**
- * One generation run: news in, drafts saved for approval. Guards against
- * overlapping and duplicate runs (scheduler delivery can repeat).
- * `force` skips the weekly guard (manual "generate now"), never the overlap guard.
+ * Shared run bookkeeping: clears crashed runs, claims the single active-run
+ * slot (scheduler delivery can repeat), saves drafts for approval and records
+ * tokens or the error.
  */
-export async function runGeneration({ force = false } = {}): Promise<RunOutcome> {
+async function executeRun(kind: RunKind, produce: (db: Db) => Promise<Produced>, skipIfRecent = false): Promise<RunOutcome> {
   const env = getServerEnv();
   const db = createAdminClient();
   const now = Date.now();
 
-  // Close out runs that crashed mid-way so they stop blocking new ones.
   const staleCutoff = new Date(now - STALE_RUN_MINUTES * 60_000).toISOString();
   await db
     .from("generation_runs")
@@ -98,11 +111,12 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
     .is("finished_at", null)
     .lt("started_at", staleCutoff);
 
-  if (!force) {
+  if (skipIfRecent) {
     const recentCutoff = new Date(now - MIN_HOURS_BETWEEN_SCHEDULED_RUNS * 3_600_000).toISOString();
     const { data: recent } = await db
       .from("generation_runs")
       .select("id")
+      .eq("kind", kind)
       .not("finished_at", "is", null)
       .is("error", null)
       .gte("started_at", recentCutoff)
@@ -112,7 +126,7 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
 
   const { data: run, error: runError } = await db
     .from("generation_runs")
-    .insert({ model: `${env.AI_PROVIDER}:${env.POST_MODEL}` })
+    .insert({ model: `${env.AI_PROVIDER}:${env.POST_MODEL}`, kind })
     .select("id")
     .single();
   // 23505 = unique violation: another run holds the one-active-run slot.
@@ -123,17 +137,13 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
   }
 
   try {
-    const [headlines, observed] = await Promise.all([recentHeadlines(db, getFeedUrls(env)), observations(db)]);
-    const { drafts, usage } = await generateDrafts({
-      call: createCaller(env, env.POST_MODEL),
-      headlines,
-      count: env.POSTS_PER_RUN,
-      observations: observed,
-    });
+    const { drafts, usage, headlineCount, stage } = await produce(db);
 
     if (drafts.length > 0) {
       const { error } = await db.from("posts").insert(
         drafts.map((d) => ({
+          kind,
+          stage: stage ?? null,
           content: d.content,
           angle: d.angle || null,
           format: d.format,
@@ -151,7 +161,7 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
       .from("generation_runs")
       .update({
         finished_at: new Date().toISOString(),
-        headline_count: headlines.length,
+        headline_count: headlineCount,
         post_count: drafts.length,
         input_tokens: usage.inputTokens,
         output_tokens: usage.outputTokens,
@@ -162,11 +172,54 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
     return { status: "done", runId: run.id, drafts: drafts.length };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Generation run failed:", message);
+    console.error(`${kind} run failed:`, message);
     await db
       .from("generation_runs")
       .update({ finished_at: new Date().toISOString(), error: message.slice(0, 500) })
       .eq("id", run.id);
     return { status: "failed", runId: run.id };
   }
+}
+
+/**
+ * News run: the week's most covered stories in, drafts saved for approval.
+ * `force` skips the schedule guard (manual "generate now"), never the overlap guard.
+ */
+export async function runGeneration({ force = false } = {}): Promise<RunOutcome> {
+  return executeRun(
+    "news",
+    async (db) => {
+      const env = getServerEnv();
+      const [headlines, observed] = await Promise.all([recentHeadlines(db, getFeedUrls(env)), observations(db)]);
+      const { drafts, usage } = await generateDrafts({
+        call: createCaller(env, env.POST_MODEL),
+        headlines,
+        count: env.POSTS_PER_RUN,
+        observations: observed,
+      });
+      return { drafts, usage, headlineCount: headlines.length };
+    },
+    !force,
+  );
+}
+
+/** Character run: standalone posts for one stage of the arc, avoiding earlier ones. */
+export async function runCharacterGeneration(stage: Stage): Promise<RunOutcome> {
+  return executeRun("character", async (db) => {
+    const env = getServerEnv();
+    const { data: earlier } = await db
+      .from("posts")
+      .select("content")
+      .eq("kind", "character")
+      .order("created_at", { ascending: false })
+      .limit(MAX_EARLIER)
+      .returns<{ content: string }[]>();
+    const { drafts, usage } = await generateCharacterPosts({
+      call: createCaller(env, env.POST_MODEL),
+      stage,
+      count: CHARACTER_POSTS_PER_RUN,
+      earlier: (earlier ?? []).map((p) => p.content),
+    });
+    return { drafts, usage, headlineCount: 0, stage };
+  });
 }
