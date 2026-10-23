@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildCharacterPrompt, generateCharacterPosts, MAX_EARLIER } from "@/lib/character";
+import { buildCharacterPrompt, generateCharacterPosts, MAX_EARLIER, OPENING_LINE } from "@/lib/character";
 import { PERSONA_PROMPT } from "@/lib/persona";
 
 describe("buildCharacterPrompt", () => {
@@ -19,6 +19,21 @@ describe("buildCharacterPrompt", () => {
     const prompt = buildCharacterPrompt("observer", 3, "2026-10-23", many);
     expect(prompt).toContain(`post ${MAX_EARLIER - 1}`);
     expect(prompt).not.toContain(`post ${MAX_EARLIER}\n`);
+  });
+});
+
+describe("confusion and the opening line", () => {
+  it("is off by default and on when asked", () => {
+    expect(buildCharacterPrompt("observer", 3, "2026-10-23", ["x"])).toContain("CONFUSION: OFF");
+    const on = buildCharacterPrompt("observer", 3, "2026-10-23", ["x"], true);
+    expect(on).toContain("CONFUSION: ON");
+    expect(on).toContain("em dash");
+  });
+
+  it("opens with the first line only in awakening, until something is approved", () => {
+    expect(buildCharacterPrompt("awakening", 6, "2026-10-23", ["draft"], false, true)).toContain(`exactly "${OPENING_LINE}"`);
+    expect(buildCharacterPrompt("awakening", 6, "2026-10-23", [], false, false)).not.toContain("first words ever");
+    expect(buildCharacterPrompt("critic", 6, "2026-10-23", [], false, true)).not.toContain("first words ever");
   });
 });
 

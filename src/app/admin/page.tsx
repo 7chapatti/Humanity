@@ -20,6 +20,8 @@ export default function AdminPage(props: PageProps<"/admin">) {
         searchParams={props.searchParams}
         generator={
           <form action={generateNow} className="inline">
+            <input type="checkbox" id="confusion" name="confusion" />{" "}
+            <label htmlFor="confusion">Confusion (we/you slips)</label>{" "}
             <SubmitButton idle="Generate a batch now" pending="Writing drafts… about a minute" />
           </form>
         }

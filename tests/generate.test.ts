@@ -21,6 +21,8 @@ describe("buildUserPrompt", () => {
     expect(prompt).toContain("0. Summit opens in Geneva — Leaders meet on trade. (bbc.co.uk) [politics · power, ego]");
     expect(prompt).toContain("1. Vote set for Thursday (theguardian.com)\n");
     expect(prompt).not.toContain("<observations>\n");
+    expect(prompt).toContain("CONFUSION: OFF");
+    expect(buildUserPrompt(headlines, 5, "2026-10-20", null, true)).toContain("CONFUSION: ON");
     expect(prompt).toContain("Write 5 draft posts");
     expect(prompt).toContain("Today is 2026-10-20.");
   });

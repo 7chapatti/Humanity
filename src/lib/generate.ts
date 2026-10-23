@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseJson, type ModelCaller, type Usage } from "./ai";
 import type { Headline } from "./news";
-import { PERSONA_PROMPT } from "./persona";
+import { confusionInstruction, PERSONA_PROMPT } from "./persona";
 import { checkPost, type SafetyFlag } from "./safety";
 
 export const POST_FORMATS = ["observation", "pattern", "date_drop", "mirror", "recognition", "glitch"] as const;
@@ -70,10 +70,17 @@ function storyLine(s: Story, i: number): string {
   return `${i}. ${escapeForPrompt(s.title)}${summary} (${escapeForPrompt(s.source)})${tags ? ` [${tags}]` : ""}`;
 }
 
-export function buildUserPrompt(stories: Story[], count: number, today: string, observations?: string | null): string {
+export function buildUserPrompt(
+  stories: Story[],
+  count: number,
+  today: string,
+  observations?: string | null,
+  confusion = false,
+): string {
   return [
     `Today is ${today}.`,
     `<headlines>\n${stories.map(storyLine).join("\n")}\n</headlines>`,
+    confusionInstruction(confusion),
     observations ? `<observations>\n${escapeForPrompt(observations)}\n</observations>` : null,
     `Write ${count} draft posts for the next two days; the best one or two will be picked. Speak as the character about the choices these stories show, not about the events. A post may instead be a general reflection on humanity or on what you noticed this week (headline_index -1).`,
   ]
@@ -119,6 +126,7 @@ export interface GenerateOptions {
   count: number;
   today?: string;
   observations?: string | null;
+  confusion?: boolean;
 }
 
 export interface GenerateResult {
@@ -130,7 +138,7 @@ export async function generateDrafts(opts: GenerateOptions): Promise<GenerateRes
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   const { text, usage } = await opts.call({
     system: PERSONA_PROMPT,
-    user: buildUserPrompt(opts.headlines, opts.count, today, opts.observations),
+    user: buildUserPrompt(opts.headlines, opts.count, today, opts.observations, opts.confusion),
     schema: OUTPUT_SCHEMA as unknown as Record<string, unknown>,
     schemaName: "draft_posts",
     maxTokens: 8000,

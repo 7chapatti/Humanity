@@ -184,8 +184,9 @@ async function executeRun(kind: RunKind, produce: (db: Db) => Promise<Produced>,
 /**
  * News run: the week's most covered stories in, drafts saved for approval.
  * `force` skips the schedule guard (manual "generate now"), never the overlap guard.
+ * `confusion` turns on identity slips; scheduled runs leave it off.
  */
-export async function runGeneration({ force = false } = {}): Promise<RunOutcome> {
+export async function runGeneration({ force = false, confusion = false } = {}): Promise<RunOutcome> {
   return executeRun(
     "news",
     async (db) => {
@@ -196,6 +197,7 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
         headlines,
         count: env.POSTS_PER_RUN,
         observations: observed,
+        confusion,
       });
       return { drafts, usage, headlineCount: headlines.length };
     },
@@ -204,21 +206,30 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
 }
 
 /** Character run: standalone posts for one stage of the arc, avoiding earlier ones. */
-export async function runCharacterGeneration(stage: Stage): Promise<RunOutcome> {
+export async function runCharacterGeneration(stage: Stage, confusion = false): Promise<RunOutcome> {
   return executeRun("character", async (db) => {
     const env = getServerEnv();
-    const { data: earlier } = await db
-      .from("posts")
-      .select("content")
-      .eq("kind", "character")
-      .order("created_at", { ascending: false })
-      .limit(MAX_EARLIER)
-      .returns<{ content: string }[]>();
+    const [{ data: earlier }, { count: approved }] = await Promise.all([
+      db
+        .from("posts")
+        .select("content")
+        .eq("kind", "character")
+        .order("created_at", { ascending: false })
+        .limit(MAX_EARLIER)
+        .returns<{ content: string }[]>(),
+      db
+        .from("posts")
+        .select("id", { count: "exact", head: true })
+        .eq("kind", "character")
+        .in("status", ["approved", "posted"]),
+    ]);
     const { drafts, usage } = await generateCharacterPosts({
       call: createCaller(env, env.POST_MODEL),
       stage,
       count: CHARACTER_POSTS_PER_RUN,
       earlier: (earlier ?? []).map((p) => p.content),
+      confusion,
+      opening: approved === 0,
     });
     return { drafts, usage, headlineCount: 0, stage };
   });

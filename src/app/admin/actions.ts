@@ -139,9 +139,9 @@ function finishRun(outcome: RunOutcome, path: string): never {
 }
 
 /** Manual news run, bypassing the schedule guard (never the overlap guard). */
-export async function generateNow() {
+export async function generateNow(formData: FormData) {
   await requireAdmin();
-  finishRun(await runGeneration({ force: true }), KIND_PATHS.news);
+  finishRun(await runGeneration({ force: true, confusion: formData.get("confusion") === "on" }), KIND_PATHS.news);
 }
 
 /** Writes a batch of standalone character posts for the chosen stage. */
@@ -149,5 +149,5 @@ export async function generateCharacterNow(formData: FormData) {
   await requireAdmin();
   const stage = z.enum(STAGES).safeParse(formData.get("stage"));
   if (!stage.success) redirect(`${KIND_PATHS.character}?error=invalid`);
-  finishRun(await runCharacterGeneration(stage.data), KIND_PATHS.character);
+  finishRun(await runCharacterGeneration(stage.data, formData.get("confusion") === "on"), KIND_PATHS.character);
 }

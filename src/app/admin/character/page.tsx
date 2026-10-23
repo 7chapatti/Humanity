@@ -34,6 +34,8 @@ export default function CharacterPage(props: PageProps<"/admin/character">) {
                 </option>
               ))}
             </select>{" "}
+            <input type="checkbox" id="confusion" name="confusion" />{" "}
+            <label htmlFor="confusion">Confusion (we/you slips)</label>{" "}
             <SubmitButton idle="Write character posts" pending="Writing… about a minute" />
           </form>
         }
