@@ -39,6 +39,7 @@ interface PostRow {
   format: string;
   status: Status;
   flags: string[];
+  angle: string | null;
   headline_title: string | null;
   headline_source: string | null;
   headline_link: string | null;
@@ -86,7 +87,7 @@ async function AdminContent({ searchParams }: Pick<PageProps<"/admin">, "searchP
   const [{ data: posts, error: postsError }, { data: runs }] = await Promise.all([
     db
       .from("posts")
-      .select("id, content, format, status, flags, headline_title, headline_source, headline_link, created_at")
+      .select("id, content, format, status, flags, angle, headline_title, headline_source, headline_link, created_at")
       .eq("status", status)
       .order("created_at", { ascending: false })
       .limit(100)
@@ -151,6 +152,12 @@ async function AdminContent({ searchParams }: Pick<PageProps<"/admin">, "searchP
                 </form>
               ) : (
                 <p className="post">{post.content}</p>
+              )}
+
+              {post.angle && (
+                <p className="source">
+                  <strong>Angle:</strong> {post.angle}
+                </p>
               )}
 
               {post.flags.map((flag) => (

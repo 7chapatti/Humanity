@@ -1,17 +1,23 @@
 import "server-only";
 import { pickBalanced } from "./balance";
 import { getFeedUrls, getServerEnv } from "./config";
-import { generateDrafts } from "./generate";
+import { generateDrafts, type Story } from "./generate";
 import { createCaller } from "./models";
-import { fetchHeadlines, type Headline } from "./news";
+import { fetchHeadlines } from "./news";
+import { formatObservations } from "./observations";
 import { createAdminClient } from "./supabase/admin";
 
 const HEADLINE_WINDOW_HOURS = 48;
 const HEADLINES_PER_RUN = 40;
 
+const OBSERVATION_WINDOW_DAYS = 7;
+
 interface RecentArticle {
   title: string;
   url: string;
+  summary: string | null;
+  topic: string | null;
+  patterns: string[];
   sources: { name: string } | { name: string }[] | null;
 }
 
@@ -19,21 +25,41 @@ interface RecentArticle {
  * Recent stored articles, taking turns across outlets so no source dominates.
  * Falls back to fetching the FEED_URLS feeds while the articles table is empty.
  */
-async function recentHeadlines(db: ReturnType<typeof createAdminClient>, feedUrls: string[]): Promise<Headline[]> {
+async function recentHeadlines(db: ReturnType<typeof createAdminClient>, feedUrls: string[]): Promise<Story[]> {
   const since = new Date(Date.now() - HEADLINE_WINDOW_HOURS * 3_600_000).toISOString();
   const { data } = await db
     .from("articles")
-    .select("title, url, sources(name)")
+    .select("title, url, summary, topic, patterns, sources(name)")
     .gte("fetched_at", since)
     .order("published_at", { ascending: false, nullsFirst: false })
     .limit(400)
     .returns<RecentArticle[]>();
-  const headlines: Headline[] = (data ?? []).map((a) => {
+  const headlines: Story[] = (data ?? []).map((a) => {
     const source = Array.isArray(a.sources) ? a.sources.at(0) : a.sources;
-    return { title: a.title, link: a.url, source: source?.name ?? "unknown" };
+    return {
+      title: a.title,
+      link: a.url,
+      source: source?.name ?? "unknown",
+      summary: a.summary,
+      topic: a.topic,
+      patterns: a.patterns,
+    };
   });
   if (headlines.length > 0) return pickBalanced(headlines, (h) => h.source, HEADLINES_PER_RUN);
   return fetchHeadlines(feedUrls);
+}
+
+/**
+ * Week-level counts the writer may quote. Optional: if the stats query fails
+ * the run carries on with headlines alone.
+ */
+async function observations(db: ReturnType<typeof createAdminClient>): Promise<string | null> {
+  const { data, error } = await db.rpc("observer_stats", { window_days: OBSERVATION_WINDOW_DAYS });
+  if (error) {
+    console.error("observer_stats failed:", error.message);
+    return null;
+  }
+  return formatObservations(data, OBSERVATION_WINDOW_DAYS);
 }
 
 /** A run older than this with no finish time is treated as crashed. */
@@ -89,17 +115,19 @@ export async function runGeneration({ force = false } = {}): Promise<RunOutcome>
   }
 
   try {
-    const headlines = await recentHeadlines(db, getFeedUrls(env));
+    const [headlines, observed] = await Promise.all([recentHeadlines(db, getFeedUrls(env)), observations(db)]);
     const { drafts, usage } = await generateDrafts({
       call: createCaller(env, env.POST_MODEL),
       headlines,
       count: env.POSTS_PER_RUN,
+      observations: observed,
     });
 
     if (drafts.length > 0) {
       const { error } = await db.from("posts").insert(
         drafts.map((d) => ({
           content: d.content,
+          angle: d.angle || null,
           format: d.format,
           flags: d.flags,
           headline_title: d.headline?.title ?? null,
