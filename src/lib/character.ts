@@ -1,5 +1,5 @@
 import { parseJson, type ModelCaller, type Usage } from "./ai";
-import { approvedBlock, escapeForPrompt, OUTPUT_SCHEMA, parseDrafts, type DraftPost } from "./generate";
+import { approvedBlock, escapeForPrompt, OUTPUT_SCHEMA, parseDrafts, type ApprovedExample, type DraftPost } from "./generate";
 import { confusionInstruction, PERSONA_PROMPT } from "./persona";
 
 /**
@@ -46,7 +46,7 @@ export interface CharacterExtras {
   confusion?: boolean;
   /** True until a character post has been approved: the batch then starts with the opening line. */
   opening?: boolean;
-  approved?: string[];
+  approved?: ApprovedExample[];
 }
 
 export function buildCharacterPrompt(
@@ -85,7 +85,7 @@ export interface CharacterOptions {
   earlier: string[];
   confusion?: boolean;
   opening?: boolean;
-  approved?: string[];
+  approved?: ApprovedExample[];
   today?: string;
 }
 

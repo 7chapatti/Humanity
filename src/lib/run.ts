@@ -1,7 +1,7 @@
 import "server-only";
 import { getFeedUrls, getServerEnv } from "./config";
 import { generateCharacterPosts, MAX_EARLIER, type Stage } from "./character";
-import { generateDrafts, MAX_APPROVED_EXAMPLES, type DraftPost, type Story } from "./generate";
+import { generateDrafts, MAX_APPROVED_EXAMPLES, type ApprovedExample, type DraftPost, type Story } from "./generate";
 import type { Usage } from "./ai";
 import { createCaller } from "./models";
 import { fetchHeadlines } from "./news";
@@ -96,15 +96,15 @@ const SIMILARITY_WINDOW = 300;
  * their final, edited form) are the standard the writer matches; every recent
  * post of either kind is what a new draft must not repeat.
  */
-async function writerMemory(db: Db): Promise<{ approved: string[]; recent: string[] }> {
+async function writerMemory(db: Db): Promise<{ approved: ApprovedExample[]; recent: string[] }> {
   const [{ data: approved }, { data: recent }] = await Promise.all([
     db
       .from("posts")
-      .select("content")
+      .select("content, angle, image, note")
       .in("status", ["approved", "posted"])
       .order("reviewed_at", { ascending: false, nullsFirst: false })
       .limit(MAX_APPROVED_EXAMPLES)
-      .returns<{ content: string }[]>(),
+      .returns<ApprovedExample[]>(),
     db
       .from("posts")
       .select("content")
@@ -112,7 +112,7 @@ async function writerMemory(db: Db): Promise<{ approved: string[]; recent: strin
       .limit(SIMILARITY_WINDOW)
       .returns<{ content: string }[]>(),
   ]);
-  return { approved: (approved ?? []).map((p) => p.content), recent: (recent ?? []).map((p) => p.content) };
+  return { approved: approved ?? [], recent: (recent ?? []).map((p) => p.content) };
 }
 
 interface Produced {

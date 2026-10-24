@@ -25,6 +25,12 @@ const reviewSchema = z.object({
   decision: z.enum(["approved", "rejected"]),
   // Textareas submit Windows line breaks; store plain newlines.
   content: z.string().transform((t) => t.replace(/\r\n?/g, "\n").trim()).pipe(z.string().min(1).max(1000)),
+  // Optional "why it works" note; it travels with the post into future prompts.
+  note: z
+    .string()
+    .nullish()
+    .transform((t) => t?.replace(/\s+/g, " ").trim() || null)
+    .pipe(z.string().max(300).nullable()),
 });
 
 /** Approve or reject a draft, saving any edits made to its text. */
@@ -35,10 +41,11 @@ export async function reviewPost(formData: FormData) {
     id: formData.get("id"),
     decision: formData.get("decision"),
     content: formData.get("content"),
+    note: formData.get("note"),
   });
   if (!parsed.success) redirect(`${back}?error=invalid`);
 
-  const { id, decision, content } = parsed.data;
+  const { id, decision, content, note } = parsed.data;
   const db = createAdminClient();
   // Keep the model's first text the first time it is edited, so drafts can be compared with finals.
   const { data: current } = await db
@@ -54,6 +61,7 @@ export async function reviewPost(formData: FormData) {
       content,
       flags: checkPost(content),
       reviewed_at: new Date().toISOString(),
+      note,
       ...(edited ? { original_content: current.content } : {}),
     })
     .eq("id", id)
