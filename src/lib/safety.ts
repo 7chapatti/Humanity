@@ -11,7 +11,8 @@ export type SafetyFlag =
   | "exclamation"
   | "date_with_harm"
   | "harm_language"
-  | "call_to_action";
+  | "call_to_action"
+  | "similar_to_earlier";
 
 const MAX_POST_LENGTH = 280;
 
@@ -78,4 +79,5 @@ export const FLAG_LABELS: Record<SafetyFlag, string> = {
   date_with_harm: "Date next to harm language — check it is not predicting violence",
   harm_language: "Harm language — check it is not mocking victims",
   call_to_action: "Reads like a call to action",
+  similar_to_earlier: "Close to an earlier post — check it says something new",
 };

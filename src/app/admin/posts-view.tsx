@@ -33,6 +33,8 @@ interface PostRow {
   status: Status;
   flags: string[];
   angle: string | null;
+  image: string | null;
+  original_content: string | null;
   stage: Stage | null;
   headline_title: string | null;
   headline_source: string | null;
@@ -82,7 +84,7 @@ export async function PostsView({ kind, searchParams, intro, generator }: PostsV
   const [{ data: posts, error: postsError }, { data: runs }] = await Promise.all([
     db
       .from("posts")
-      .select("id, content, format, status, flags, angle, stage, headline_title, headline_source, headline_link, created_at")
+      .select("id, content, format, status, flags, angle, image, original_content, stage, headline_title, headline_source, headline_link, created_at")
       .eq("kind", kind)
       .eq("status", status)
       .order("created_at", { ascending: false })
@@ -157,6 +159,18 @@ export async function PostsView({ kind, searchParams, intro, generator }: PostsV
               {post.angle && (
                 <p className="source">
                   <strong>Angle:</strong> {post.angle}
+                </p>
+              )}
+
+              {post.image && (
+                <p className="source">
+                  <strong>Image:</strong> {post.image}
+                </p>
+              )}
+
+              {post.original_content && (
+                <p className="source">
+                  <strong>Original draft:</strong> {post.original_content}
                 </p>
               )}
 

@@ -23,7 +23,8 @@ function returnPath(formData: FormData): string {
 const reviewSchema = z.object({
   id: z.uuid(),
   decision: z.enum(["approved", "rejected"]),
-  content: z.string().trim().min(1).max(1000),
+  // Textareas submit Windows line breaks; store plain newlines.
+  content: z.string().transform((t) => t.replace(/\r\n?/g, "\n").trim()).pipe(z.string().min(1).max(1000)),
 });
 
 /** Approve or reject a draft, saving any edits made to its text. */
@@ -39,6 +40,13 @@ export async function reviewPost(formData: FormData) {
 
   const { id, decision, content } = parsed.data;
   const db = createAdminClient();
+  // Keep the model's first text the first time it is edited, so drafts can be compared with finals.
+  const { data: current } = await db
+    .from("posts")
+    .select("content, original_content")
+    .eq("id", id)
+    .maybeSingle<{ content: string; original_content: string | null }>();
+  const edited = current && current.content !== content && current.original_content === null;
   const { error } = await db
     .from("posts")
     .update({
@@ -46,6 +54,7 @@ export async function reviewPost(formData: FormData) {
       content,
       flags: checkPost(content),
       reviewed_at: new Date().toISOString(),
+      ...(edited ? { original_content: current.content } : {}),
     })
     .eq("id", id)
     .in("status", ["draft", "approved"]);
