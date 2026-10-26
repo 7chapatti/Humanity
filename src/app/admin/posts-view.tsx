@@ -82,7 +82,7 @@ export async function PostsView({ kind, searchParams, intro, generator }: PostsV
   const generated = typeof params.generated === "string" ? Number.parseInt(params.generated, 10) : NaN;
 
   const db = createAdminClient();
-  const [{ data: posts, error: postsError }, { data: runs }] = await Promise.all([
+  const [{ data: posts, error: postsError }, { data: runs }, counts] = await Promise.all([
     db
       .from("posts")
       .select("id, content, format, status, flags, angle, image, original_content, note, stage, headline_title, headline_source, headline_link, created_at")
@@ -98,6 +98,17 @@ export async function PostsView({ kind, searchParams, intro, generator }: PostsV
       .order("started_at", { ascending: false })
       .limit(5)
       .returns<RunRow[]>(),
+    // How many posts of this kind sit in each status, shown on the filters.
+    Promise.all(
+      STATUSES.map(async (s) => {
+        const { count } = await db
+          .from("posts")
+          .select("id", { count: "exact", head: true })
+          .eq("kind", kind)
+          .eq("status", s);
+        return count ?? 0;
+      }),
+    ),
   ]);
 
   return (
@@ -107,9 +118,9 @@ export async function PostsView({ kind, searchParams, intro, generator }: PostsV
       <main>
         {intro}
         <nav aria-label="Post status" className="filters">
-          {STATUSES.map((s) => (
+          {STATUSES.map((s, i) => (
             <Link key={s} href={`${basePath}?status=${s}`} aria-current={s === status ? "page" : undefined}>
-              {STATUS_LABELS[s]}
+              {STATUS_LABELS[s]} ({counts[i]})
             </Link>
           ))}
         </nav>
