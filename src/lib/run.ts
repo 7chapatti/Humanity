@@ -7,6 +7,7 @@ import { createCaller } from "./models";
 import { fetchHeadlines } from "./news";
 import { formatObservations } from "./observations";
 import { selectStories } from "./selection";
+import { formatSnapshot, parseSnapshot, toThreadStories, type ThreadStoryRow } from "./stories";
 import { isTooSimilar } from "./similarity";
 import { createAdminClient } from "./supabase/admin";
 
@@ -25,12 +26,24 @@ interface RecentArticle {
   sources: { name: string } | { name: string }[] | null;
 }
 
+/** Fewer thread stories than this (threads still forming) → fall back to single articles. */
+const MIN_THREAD_STORIES = 8;
+
 /**
- * The tagged stories from the last two days most worth commenting on (see
- * selection.ts). Falls back to fetching the FEED_URLS feeds while the
- * articles table is empty.
+ * The stories from the last two days most worth commenting on: story threads
+ * ranked by how many outlets cover them (stories.ts). While threads are still
+ * forming, single articles (selection.ts); with no articles at all, the
+ * FEED_URLS feeds.
  */
 async function recentHeadlines(db: Db, feedUrls: string[]): Promise<Story[]> {
+  const { data: threadRows, error: threadError } = await db.rpc("thread_stories", {
+    p_hours: HEADLINE_WINDOW_HOURS,
+    p_limit: 120,
+  });
+  if (threadError) console.error("thread_stories failed:", threadError.message);
+  const threaded = toThreadStories((threadRows ?? []) as ThreadStoryRow[], HEADLINES_PER_RUN);
+  if (threaded.length >= MIN_THREAD_STORIES) return threaded;
+
   const since = new Date(Date.now() - HEADLINE_WINDOW_HOURS * 3_600_000).toISOString();
   const { data } = await db
     .from("articles")
@@ -59,18 +72,33 @@ async function recentHeadlines(db: Db, feedUrls: string[]): Promise<Story[]> {
   return fetchHeadlines(feedUrls);
 }
 
+/** A snapshot older than this is too stale to describe "this week". */
+const SNAPSHOT_MAX_AGE_DAYS = 8;
+
 /**
- * Week-level counts: background on what the character has been noticing,
- * never quoted (the persona forbids it). Optional: if the stats query fails
- * the run carries on with headlines alone.
+ * Background on what the character has been noticing: week-level counts and
+ * the latest weekly snapshot (biggest and faded stories). Never quoted; the
+ * persona forbids it. Optional: if a query fails the run carries on without it.
  */
 async function observations(db: Db): Promise<string | null> {
-  const { data, error } = await db.rpc("observer_stats", { window_days: OBSERVATION_WINDOW_DAYS });
-  if (error) {
-    console.error("observer_stats failed:", error.message);
-    return null;
-  }
-  return formatObservations(data, OBSERVATION_WINDOW_DAYS);
+  const snapshotSince = new Date(Date.now() - SNAPSHOT_MAX_AGE_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const [stats, snapshot] = await Promise.all([
+    db.rpc("observer_stats", { window_days: OBSERVATION_WINDOW_DAYS }),
+    db
+      .from("snapshots")
+      .select("data")
+      .gte("week_start", snapshotSince)
+      .order("week_start", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ data: unknown }>(),
+  ]);
+  if (stats.error) console.error("observer_stats failed:", stats.error.message);
+  const parsed = snapshot.data ? parseSnapshot(snapshot.data.data) : null;
+  const parts = [
+    stats.error ? null : formatObservations(stats.data, OBSERVATION_WINDOW_DAYS),
+    parsed ? formatSnapshot(parsed) : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join("\n") : null;
 }
 
 /** A run older than this with no finish time is treated as crashed. */
@@ -185,6 +213,7 @@ async function executeRun(kind: RunKind, produce: (db: Db) => Promise<Produced>,
           headline_title: d.headline?.title ?? null,
           headline_source: d.headline?.source ?? null,
           headline_link: d.headline?.link ?? null,
+          thread_id: d.threadId,
           run_id: run.id,
         })),
       );

@@ -12,6 +12,8 @@ export interface Story extends Headline {
   summary?: string | null;
   topic?: string | null;
   patterns?: string[];
+  /** The story thread this came from, so the post can cite it. */
+  threadId?: string | null;
 }
 
 export interface DraftPost {
@@ -20,6 +22,7 @@ export interface DraftPost {
   image: string;
   format: PostFormat;
   headline: Headline | null;
+  threadId: string | null;
   flags: SafetyFlag[];
 }
 
@@ -147,6 +150,7 @@ export function parseDrafts(raw: unknown, headlines: Story[], max: number): Draf
       image: post.image,
       format: post.format,
       headline: story && { title: story.title, source: story.source, link: story.link },
+      threadId: story?.threadId ?? null,
       flags: checkPost(post.content),
     });
     if (drafts.length >= max) break;

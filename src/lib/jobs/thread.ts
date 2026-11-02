@@ -9,6 +9,12 @@ import type { Db, JobResult } from "./runner";
 export const THREAD_MIN_SIMILARITY = 0.6;
 /** An article only joins a thread active within this many days of it. */
 export const THREAD_WINDOW_DAYS = 7;
+/**
+ * Two threads this alike are one story that split early on, and are merged.
+ * Tuned on real threads: the same story split in two scored 0.77 to 0.80,
+ * neighbouring stories (France vs Germany protests) 0.73.
+ */
+export const MERGE_MIN_SIMILARITY = 0.75;
 const MAX_PER_RUN = 800;
 
 /**
@@ -26,10 +32,8 @@ export async function threadArticles(db: Db): Promise<JobResult> {
     .limit(MAX_PER_RUN)
     .returns<{ id: string }[]>();
   if (error) throw new Error(`Loading articles failed: ${error.message}`);
-  if (!rows?.length) return { itemsIn: 0, itemsOut: 0 };
-
   let assigned = 0;
-  for (const row of rows) {
+  for (const row of rows ?? []) {
     const { data, error: assignError } = await db.rpc("assign_thread", {
       p_article: row.id,
       p_min_similarity: THREAD_MIN_SIMILARITY,
@@ -38,5 +42,11 @@ export async function threadArticles(db: Db): Promise<JobResult> {
     if (assignError) throw new Error(`Threading failed: ${assignError.message}`);
     if (data) assigned++;
   }
-  return { itemsIn: rows.length, itemsOut: assigned };
+
+  const { error: mergeError } = await db.rpc("merge_similar_threads", {
+    p_min_similarity: MERGE_MIN_SIMILARITY,
+    p_window_days: THREAD_WINDOW_DAYS,
+  });
+  if (mergeError) throw new Error(`Merging threads failed: ${mergeError.message}`);
+  return { itemsIn: rows?.length ?? 0, itemsOut: assigned };
 }

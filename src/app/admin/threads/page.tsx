@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth";
+import { momentum, parseSnapshot } from "@/lib/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AdminHeader } from "../admin-header";
 
@@ -71,6 +72,14 @@ async function ThreadsContent() {
     .limit(MAX_THREADS)
     .returns<ThreadRow[]>();
 
+  const { data: latest } = await db
+    .from("snapshots")
+    .select("week_start, data")
+    .order("week_start", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ week_start: string; data: unknown }>();
+  const snapshot = latest ? parseSnapshot(latest.data) : null;
+
   const ids = (threads ?? []).map((t) => t.id);
   const { data: articles } = ids.length
     ? await db
@@ -88,6 +97,38 @@ async function ThreadsContent() {
     <>
       <AdminHeader current="/admin/threads" />
       <main>
+        <section aria-labelledby="snapshot-heading">
+          <h2 id="snapshot-heading">Weekly snapshot</h2>
+          {latest && snapshot ? (
+            <>
+              <p>
+                The 7 days before <time dateTime={latest.week_start}>{latest.week_start}</time>:{" "}
+                <strong>{snapshot.articles}</strong> articles read. Taken every Monday; the writer uses it as background.
+              </p>
+              <h3>Biggest stories</h3>
+              <ol>
+                {snapshot.top.map((t) => (
+                  <li key={t.title}>
+                    <strong>{t.title}</strong>: {t.outlets} outlets, {momentum(t.articles, t.last_week)}
+                  </li>
+                ))}
+              </ol>
+              <h3>Faded without resolution</h3>
+              {snapshot.faded.length > 0 ? (
+                <ul>
+                  {snapshot.faded.map((f) => (
+                    <li key={f.title}>{f.title}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>None this week.</p>
+              )}
+            </>
+          ) : (
+            <p>No snapshot yet. The first is taken on the first pipeline run after Monday 00:00 UTC.</p>
+          )}
+        </section>
+
         <section aria-labelledby="threads-heading">
           <h2 id="threads-heading">Threads</h2>
           <p>

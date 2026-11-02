@@ -32,6 +32,7 @@ const JOB_LABELS: Record<string, { name: string; counts: string }> = {
   embed: { name: "Embed", counts: "to embed → embedded" },
   thread: { name: "Thread", counts: "to group → grouped" },
   summarize: { name: "Summarise", counts: "stale threads → summarised" },
+  snapshot: { name: "Snapshot", counts: "due → taken" },
   cleanup: { name: "Cleanup", counts: "old rows removed" },
 };
 
@@ -93,7 +94,7 @@ async function JobsContent({ searchParams }: Pick<PageProps<"/admin/jobs">, "sea
           <h2 id="jobs-heading">Jobs</h2>
           <p>
             The pipeline runs every 2 hours: ingest new articles, tag them, embed them, group them into story threads,
-            summarise the threads, then remove data older than 90 days. Target: under 5% failed runs over a week. Last 7 days: <strong>{week.failed}</strong> failed of <strong>{week.total}</strong>.
+            summarise the threads, take the weekly snapshot on Mondays, then remove data older than 90 days. Target: under 5% failed runs over a week. Last 7 days: <strong>{week.failed}</strong> failed of <strong>{week.total}</strong>.
           </p>
           <form action={runPipelineNow} className="inline">
             <SubmitButton idle="Run the pipeline now" pending="Starting…" />
