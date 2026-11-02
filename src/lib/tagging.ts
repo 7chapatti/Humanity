@@ -21,12 +21,12 @@ export interface ArticleTags {
 export const TAGGER_PROMPT = `You classify world news articles for an analysis system. You do not write opinions.
 
 For each article return:
-- topic: the single best fit from the allowed list. "conflict" means armed conflict, war, military action or terrorism only; crime, court cases, legal disputes, sport rows and political arguments are not conflict (crime and courts are "society").
+- topic: the single best fit from the allowed list. "conflict" means armed conflict, war, military action or terrorism only; crime, court cases, legal disputes, protests, riots, police clashes, land or development disputes, sport rows and political arguments are not conflict (they are "society" or "politics").
 - region: where the story mainly happens. Use "global" only for stories that genuinely span many regions.
 - entities: up to 5 proper names of people, countries, places or organisations central to the story, as commonly written. Never the news outlet or publisher reporting it, and never concepts, sectors or generic nouns (not "accountability", "coffee sector", "tribunal"). Fewer is better than padding.
 - patterns: 0 to 3 human behaviour patterns the story clearly shows, from this fixed list:
   power: seeking or holding control
-  fear: decisions driven by threat or panic
+  fear: decisions driven by threat or panic (not merely a story that mentions danger, a warning or unrest)
   profit: money placed above other concerns
   ego: pride, status or image driving action
   tribalism: us-versus-them group loyalty
@@ -96,9 +96,15 @@ export function buildTagPrompt(articles: ArticleToTag[]): string {
  * a capital letter or digit), no duplicates, and no name that is just a
  * word of a longer one ("Musk" when "Elon Musk" is there). Max 5, 80 chars each.
  */
-export function cleanEntities(raw: string[]): string[] {
+export function cleanEntities(raw: string[], outlet = ""): string[] {
+  const own = outlet.trim().toLowerCase();
+  // The reporting outlet ("CBS News" from "CBS News World") is never one of the story's names.
+  const isOutlet = (e: string) => {
+    const name = e.toLowerCase();
+    return own !== "" && (name === own || own.startsWith(`${name} `));
+  };
   const names = [...new Set(raw.map((e) => e.replace(/\s+/g, " ").trim()))].filter(
-    (e) => e.length > 0 && e.length <= 80 && /^[\p{Lu}\p{N}]/u.test(e),
+    (e) => e.length > 0 && e.length <= 80 && /^[\p{Lu}\p{N}]/u.test(e) && !isOutlet(e),
   );
   const kept = names.filter(
     (name) => !names.some((other) => other !== name && other.split(" ").includes(name)),
@@ -120,7 +126,7 @@ export function parseTags(raw: unknown, articles: ArticleToTag[]): ArticleTags[]
   for (const item of parsed.data.items) {
     if (item.index < 0 || item.index >= articles.length || done.has(item.index)) continue;
     done.add(item.index);
-    const entities = cleanEntities(item.entities);
+    const entities = cleanEntities(item.entities, articles[item.index].outlet);
     const patterns = [
       ...new Set(item.patterns.map((p) => p.trim().toLowerCase()).filter((p): p is Pattern => PATTERNS.includes(p as Pattern))),
     ].slice(0, 3);

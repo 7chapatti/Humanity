@@ -7,7 +7,7 @@ import type { Db, JobResult } from "./runner";
 const MAX_ITEMS_PER_SOURCE = 50;
 
 /** Roundups and bulletins, not stories: they add noise to tags and threads. */
-const ROUNDUP_TITLE = /\b(news bulletin|news in brief|all of africa today|morning briefing|evening briefing|live updates|as it happened|week in pictures)\b/i;
+const ROUNDUP_TITLE = /\b(news bulletin|news in brief|all of africa today|morning briefing|evening briefing|live updates|as it happened|week in pictures)\b|^(almanac|transcript|full transcript)\b/i;
 
 export function isRoundup(title: string): boolean {
   return ROUNDUP_TITLE.test(title);

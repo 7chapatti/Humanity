@@ -8,6 +8,12 @@ describe("cleanEntities", () => {
     ).toEqual(["Tesla", "Elon Musk", "Lahore High Court", "G7"]);
   });
 
+  it("drops the reporting outlet", () => {
+    expect(cleanEntities(["CBS News", "Iran", "Al Jazeera"], "CBS News World")).toEqual(["Iran", "Al Jazeera"]);
+    expect(cleanEntities(["Al Jazeera", "India"], "Al Jazeera")).toEqual(["India"]);
+    expect(cleanEntities(["Dawn Raid Ltd", "Pakistan"], "Dawn")).toEqual(["Dawn Raid Ltd", "Pakistan"]);
+  });
+
   it("handles accented capitals and caps at five", () => {
     expect(cleanEntities(["Élysée", "Ödön", "A", "B", "C", "D"])).toEqual(["Élysée", "Ödön", "A", "B", "C"]);
   });
