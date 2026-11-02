@@ -9,6 +9,9 @@ describe("isRoundup", () => {
     expect(isRoundup("Africa: All of Africa Today - October 22, 2026")).toBe(true);
     expect(isRoundup("Ukraine war live updates: talks resume")).toBe(true);
     expect(isRoundup("Almanac: November 1")).toBe(true);
+    expect(isRoundup("10/30: CBS Evening News")).toBe(true);
+    expect(isRoundup("11/1: Face The Nation")).toBe(true);
+    expect(isRoundup("Inflation 3/4 of a point higher")).toBe(false);
     expect(isRoundup('Transcript: David Becker on "Face the Nation"')).toBe(true);
     expect(isRoundup("Central bank holds rates as inflation eases")).toBe(false);
     expect(isRoundup("Bulletin board scheme helps refugees find homes")).toBe(false);
