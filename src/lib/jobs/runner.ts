@@ -3,7 +3,7 @@ import type { Usage } from "../ai";
 import type { createAdminClient } from "../supabase/admin";
 
 export type Db = ReturnType<typeof createAdminClient>;
-export type JobName = "ingest" | "tag" | "cleanup";
+export type JobName = "ingest" | "tag" | "embed" | "thread" | "summarize" | "cleanup";
 
 export interface JobResult {
   itemsIn: number;

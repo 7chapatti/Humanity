@@ -5,6 +5,7 @@ const SECTIONS = [
   { href: "/admin", label: "Posts" },
   { href: "/admin/character", label: "Character" },
   { href: "/admin/articles", label: "Articles" },
+  { href: "/admin/threads", label: "Threads" },
   { href: "/admin/sources", label: "Sources" },
   { href: "/admin/jobs", label: "Jobs" },
 ] as const;
