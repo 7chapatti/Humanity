@@ -6,6 +6,7 @@ import { createCaller } from "../models";
 import { createAdminClient } from "../supabase/admin";
 import { cleanup } from "./cleanup";
 import { embedArticles } from "./embed";
+import { runForecasts } from "./forecast";
 import { takeSnapshot } from "./snapshot";
 import { ingest } from "./ingest";
 import { runJob, type JobOutcome } from "./runner";
@@ -17,7 +18,7 @@ import { threadArticles } from "./thread";
  * The information pipeline, run every 2 hours by Supabase Cron: ingest new
  * articles, tag them with the cheap model, embed them, group them into story
  * threads, name and summarise the threads, take the weekly snapshot (once a
- * week), then prune old data.
+ * week), score and make attention-decay forecasts, then prune old data.
  * Embeddings need an OpenAI key; without one those steps are skipped.
  * Each step is logged separately; a failed step does not stop the next.
  */
@@ -33,6 +34,7 @@ export async function runPipeline(): Promise<JobOutcome[]> {
     outcomes.push(await runJob(db, "thread", () => threadArticles(db)));
     outcomes.push(await runJob(db, "summarize", () => summarizeThreads(db, createCaller(env, env.TAG_MODEL))));
     outcomes.push(await runJob(db, "snapshot", () => takeSnapshot(db)));
+    outcomes.push(await runJob(db, "forecast", () => runForecasts(db)));
   }
   outcomes.push(await runJob(db, "cleanup", () => cleanup(db)));
   return outcomes;
