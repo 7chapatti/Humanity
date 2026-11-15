@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parseJson, type ModelCaller, type Usage } from "./ai";
 import type { Headline } from "./news";
 import { confusionInstruction, PERSONA_PROMPT } from "./persona";
+import { unsourcedFigures } from "./figures";
 import { checkPost, type SafetyFlag } from "./safety";
 
 export const POST_FORMATS = ["observation", "pattern", "date_drop", "mirror", "recognition", "glitch"] as const;
@@ -151,7 +152,13 @@ export function parseDrafts(raw: unknown, headlines: Story[], max: number): Draf
       format: post.format,
       headline: story && { title: story.title, source: story.source, link: story.link },
       threadId: story?.threadId ?? null,
-      flags: checkPost(post.content),
+      flags: [
+        ...checkPost(post.content),
+        // Every number must come from the story it responds to; standalone posts may not use any.
+        ...(unsourcedFigures(post.content, story ? `${story.title} ${story.summary ?? ""}` : "").length > 0
+          ? (["unsourced_figure"] as const)
+          : []),
+      ],
     });
     if (drafts.length >= max) break;
   }
